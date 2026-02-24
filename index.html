@@ -467,8 +467,6 @@
 
     var STORAGE_KEY = 'vocab-quiz-v2';
     var LABELS = ['A', 'B', 'C', 'D'];
-    var MASTERY_HITS = 3;   // 本单元词需答对次数
-    var REVIEW_HITS = 1;    // 复习词需答对次数
     var REQUEUE_GAP = 3;    // 答错后最少间隔几题再出现
     var FALLBACK_DELAY = 1500; // TTS 不可用时的回退延迟
     var hasTTS = !!(window.speechSynthesis);
@@ -527,47 +525,117 @@
         return;
       }
 
+      // Cancel any ongoing speech
       speechSynthesis.cancel();
       if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
 
       var enUtter = new SpeechSynthesisUtterance(englishText);
       enUtter.lang = 'en-GB';
-      enUtter.rate = 0.9;
+      enUtter.rate = 0.85;
 
       var zhUtter = new SpeechSynthesisUtterance(chineseText);
       zhUtter.lang = 'zh-CN';
-      zhUtter.rate = 0.9;
+      zhUtter.rate = 0.85;
 
       var done = false;
       function finish() {
         if (done) return;
         done = true;
         if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
-        setTimeout(callback, 300);
+        setTimeout(callback, 400);
       }
 
       enUtter.onend = function () {
-        speechSynthesis.speak(zhUtter);
+        setTimeout(function () { speechSynthesis.speak(zhUtter); }, 150);
       };
       enUtter.onerror = function () {
-        speechSynthesis.speak(zhUtter);
+        setTimeout(function () { speechSynthesis.speak(zhUtter); }, 150);
       };
 
       zhUtter.onend = finish;
       zhUtter.onerror = finish;
 
-      // Safety timeout: if TTS hangs, force continue after 6s
+      // Safety timeout: if TTS hangs, force continue after 8s
       ttsTimeout = setTimeout(function () {
         speechSynthesis.cancel();
         finish();
-      }, 6000);
+      }, 8000);
 
-      speechSynthesis.speak(enUtter);
+      // Delay after cancel() to avoid Chrome/mobile bug where speak() is silently ignored
+      setTimeout(function () {
+        speechSynthesis.speak(enUtter);
+      }, 150);
     }
 
     function stopTTS() {
       if (hasTTS) speechSynthesis.cancel();
       if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
+    }
+
+    // ==========================================
+    //  Sound Effects (Web Audio API)
+    // ==========================================
+    var audioCtx = null;
+
+    function ensureAudioCtx() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) { return null; }
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playCorrectSound() {
+      var ctx = ensureAudioCtx();
+      if (!ctx) return;
+      try {
+        var t = ctx.currentTime;
+        // First tone: D5
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.value = 587;
+        gain1.gain.setValueAtTime(0.25, t);
+        gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+        osc1.start(t);
+        osc1.stop(t + 0.2);
+        // Second tone: A5 (ascending = pleasant)
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.value = 880;
+        gain2.gain.setValueAtTime(0.25, t + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.45);
+        osc2.start(t + 0.12);
+        osc2.stop(t + 0.45);
+      } catch (e) {}
+    }
+
+    function playWrongSound() {
+      var ctx = ensureAudioCtx();
+      if (!ctx) return;
+      try {
+        var t = ctx.currentTime;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.linearRampToValueAtTime(120, t + 0.3);
+        gain.gain.setValueAtTime(0.12, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        osc.start(t);
+        osc.stop(t + 0.4);
+      } catch (e) {}
     }
 
     // ==========================================
@@ -657,6 +725,18 @@
       masteredThisSession = new Set();
       isAnswering = false;
 
+      // Warm up AudioContext and TTS on user gesture (required by mobile browsers)
+      ensureAudioCtx();
+      if (hasTTS) {
+        try {
+          speechSynthesis.cancel();
+          var warmup = new SpeechSynthesisUtterance(' ');
+          warmup.volume = 0;
+          warmup.rate = 2;
+          speechSynthesis.speak(warmup);
+        } catch (e) {}
+      }
+
       var unitInfo = UNITS.filter(function (u) { return u.id === unitId; })[0];
       document.getElementById('quizTitle').textContent = unitInfo.name;
 
@@ -712,11 +792,10 @@
       // Word
       document.getElementById('wordText').textContent = word.word;
 
-      // Mastery dots
-      var needed = item.isReview ? REVIEW_HITS : MASTERY_HITS;
+      // Mastery dots: show wrong attempt count if any
       var dotsHtml = '';
-      for (var d = 0; d < needed; d++) {
-        dotsHtml += '<span class="dot' + (d < item.correctHits ? ' filled' : '') + '"></span>';
+      if (item.wrongCount > 0) {
+        dotsHtml = '<span style="color:#f44336">已错 ' + item.wrongCount + ' 次</span>';
       }
       document.getElementById('wordHits').innerHTML = dotsHtml;
 
@@ -775,23 +854,16 @@
       // Remove current item from queue front
       queue.shift();
 
-      var needed = queueItem.isReview ? REVIEW_HITS : MASTERY_HITS;
-
       if (isCorrect) {
         btnEl.classList.add('correct');
         sessionCorrect++;
-        queueItem.correctHits++;
-
-        if (queueItem.correctHits >= needed) {
-          // Mastered / review passed
-          masteredThisSession.add(queueItem.wordId);
-        } else {
-          // Not yet mastered, put back at random position
-          requeue(queueItem);
-        }
+        playCorrectSound();
+        // 答对即掌握
+        masteredThisSession.add(queueItem.wordId);
       } else {
         btnEl.classList.add('wrong');
         sessionWrong++;
+        playWrongSound();
 
         // Highlight correct
         for (var j = 0; j < options.length; j++) {
@@ -800,18 +872,19 @@
           }
         }
 
-        // Reset hits and requeue
-        queueItem.correctHits = 0;
+        // 答错：记录错误次数，重新入队
+        queueItem.wrongCount = (queueItem.wrongCount || 0) + 1;
         requeue(queueItem);
       }
 
       updateQuizStats();
 
+      // Wait for sound effect to finish (~600ms), then play TTS
       setTimeout(function () {
         speakThenNext(correctWord.word, correctWord.meaning, function () {
           loadQuestion();
         });
-      }, 400);
+      }, 600);
     }
 
     // ==========================================
@@ -842,9 +915,10 @@
       var totalAll = totalWords + reviewTotal;
 
       var masteredNow = masteredThisSession.size;
+      var answered = sessionCorrect + sessionWrong;
 
       document.getElementById('statMastered').textContent =
-        '已掌握 ' + masteredNow + '/' + totalAll;
+        (queue.length > 0 ? '第 ' + (answered + 1) + ' 题' : '已完成') + ' · 掌握 ' + masteredNow + '/' + totalAll;
 
       var total = sessionCorrect + sessionWrong;
       var accEl = document.getElementById('statAccuracy');
@@ -857,7 +931,10 @@
         accEl.className = '';
       }
 
-      var progressPct = totalAll > 0 ? Math.round((masteredNow / totalAll) * 100) : 0;
+      var answered = sessionCorrect + sessionWrong;
+      var progressPct = (answered + queue.length) > 0
+        ? Math.round((answered / (answered + queue.length)) * 100)
+        : 0;
       document.getElementById('progressFill').style.width = progressPct + '%';
     }
 
