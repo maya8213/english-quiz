@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>康赞医的英语检测</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
+      background: #f0f4f8;
+      color: #2c3e50;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .page { display: none; width: 100%; max-width: 560px; padding: 20px; }
+    .page.active { display: block; }
+
+    /* ===== Unit Select Page ===== */
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a73e8;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .unit-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .unit-card {
+      background: #fff;
+      border: 2px solid #e8ecf1;
+      border-radius: 14px;
+      padding: 18px 20px;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .unit-card:hover {
+      border-color: #1a73e8;
+      background: #f6f9ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(26,115,232,.1);
+    }
+
+    .unit-card.done { border-color: #c8e6c9; background: #f1f8e9; }
+    .unit-card.done:hover { border-color: #4caf50; }
+
+    .unit-info { flex: 1; }
+
+    .unit-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a202c;
+      margin-bottom: 4px;
+    }
+
+    .unit-meta {
+      font-size: 12px;
+      color: #999;
+      display: flex;
+      gap: 12px;
+    }
+
+    .unit-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .badge-done { background: #e8f5e9; color: #388e3c; }
+    .badge-go { background: #e3f2fd; color: #1a73e8; }
+
+    .reset-row {
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    .btn-reset {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-size: 13px;
+      color: #888;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-reset:hover { border-color: #e74c3c; color: #e74c3c; }
+
+    /* ===== Quiz Page ===== */
+    .quiz-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .quiz-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a73e8;
+    }
+
+    .btn-back {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-back:hover { border-color: #1a73e8; color: #1a73e8; }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1a73e8, #4fc3f7);
+      border-radius: 3px;
+      transition: width .4s ease;
+      width: 0%;
+    }
+
+    .word-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 44px 24px 36px;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      margin-bottom: 24px;
+      animation: fadeIn .3s ease;
+    }
+
+    .word-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tag-unit { background: #e3f2fd; color: #1565c0; }
+    .tag-review { background: #fff3e0; color: #e65100; }
+
+    .word-text {
+      font-size: 36px;
+      font-weight: 700;
+      color: #1a202c;
+      letter-spacing: 1px;
+    }
+
+    .word-hits {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #bbb;
+    }
+
+    .word-hits .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      margin: 0 3px;
+      transition: background .3s;
+    }
+
+    .word-hits .dot.filled { background: #4caf50; }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeIn .35s ease;
+    }
+
+    .option-btn {
+      width: 100%;
+      padding: 16px 20px;
+      background: #fff;
+      border: 2px solid #e8ecf1;
+      border-radius: 12px;
+      font-size: 16px;
+      color: #2c3e50;
+      cursor: pointer;
+      text-align: left;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .option-btn:hover:not(.disabled) {
+      border-color: #1a73e8;
+      background: #f0f6ff;
+    }
+
+    .option-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #f0f4f8;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      flex-shrink: 0;
+      transition: all .2s;
+    }
+
+    .option-btn:hover:not(.disabled) .option-label {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .option-btn.correct { border-color: #4caf50; background: #e8f5e9; }
+    .option-btn.correct .option-label { background: #4caf50; color: #fff; }
+    .option-btn.wrong { border-color: #f44336; background: #ffeaea; animation: shake .4s ease; }
+    .option-btn.wrong .option-label { background: #f44336; color: #fff; }
+    .option-btn.disabled { cursor: default; opacity: .7; }
+    .option-btn.disabled:not(.correct):not(.wrong) { opacity: .45; }
+
+    /* ===== Result Page ===== */
+    .result-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      text-align: center;
+      animation: fadeIn .4s ease;
+    }
+
+    .result-icon { font-size: 56px; margin-bottom: 12px; }
+
+    .result-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #1a202c;
+    }
+
+    .result-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .result-stat {
+      padding: 14px 8px;
+      background: #f7f9fc;
+      border-radius: 12px;
+    }
+
+    .result-stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1a73e8;
+    }
+
+    .result-stat-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .result-section {
+      margin-bottom: 20px;
+      text-align: left;
+      padding: 0 4px;
+    }
+
+    .result-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .result-word-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .result-word-chip {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .chip-mastered { background: #e8f5e9; color: #2e7d32; }
+    .chip-review-pass { background: #fff3e0; color: #e65100; }
+
+    .result-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    .btn-primary {
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 32px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+
+    .btn-primary:hover { background: #1557b0; }
+
+    .btn-secondary {
+      background: #fff;
+      color: #1a73e8;
+      border: 2px solid #1a73e8;
+      border-radius: 12px;
+      padding: 11px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-secondary:hover { background: #f0f6ff; }
+
+    /* ===== Shared ===== */
+    .accuracy-high { color: #4caf50; }
+    .accuracy-mid  { color: #ff9800; }
+    .accuracy-low  { color: #f44336; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    @media (max-width: 480px) {
+      .word-text { font-size: 28px; }
+      .word-card { padding: 32px 16px 28px; }
+      .option-btn { padding: 14px 16px; font-size: 15px; }
+      .result-stat-value { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== Page 1: Unit Select ========== -->
+  <div class="page active" id="unitSelectPage">
+    <div class="page-title">康赞医的英语检测</div>
+    <div class="page-subtitle">外研社必修一 · 选择单元开始检测</div>
+    <div class="unit-list" id="unitList"></div>
+    <div class="reset-row">
+      <button class="btn-reset" id="btnResetAll">重置所有进度</button>
+    </div>
+  </div>
+
+  <!-- ========== Page 2: Quiz ========== -->
+  <div class="page" id="quizPage">
+    <div class="quiz-header">
+      <div class="quiz-title" id="quizTitle">Unit 1</div>
+      <button class="btn-back" id="btnBack">返回</button>
+    </div>
+    <div class="stats">
+      <span id="statMastered">已掌握 0/0</span>
+      <span id="statAccuracy">正确率 --</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="word-card">
+      <div class="word-tag tag-unit" id="wordTag">本单元</div>
+      <div class="word-text" id="wordText">--</div>
+      <div class="word-hits" id="wordHits"></div>
+    </div>
+    <div class="options" id="optionsContainer"></div>
+  </div>
+
+  <!-- ========== Page 3: Result ========== -->
+  <div class="page" id="resultPage">
+    <div class="result-card">
+      <div class="result-icon" id="resultIcon"></div>
+      <div class="result-title" id="resultTitle"></div>
+      <div class="result-stats">
+        <div class="result-stat">
+          <div class="result-stat-value" id="rUnitMastered">0</div>
+          <div class="result-stat-label">本单元已掌握</div>
+        </div>
+        <div class="result-stat">
+          <div class="result-stat-value" id="rReviewPassed">0</div>
+          <div class="result-stat-label">复习词已通过</div>
+        </div>
+        <div class="result-stat">
+          <div class="result-stat-value accuracy-high" id="rTotalCorrect">0</div>
+          <div class="result-stat-label">累计答对</div>
+        </div>
+        <div class="result-stat">
+          <div class="result-stat-value accuracy-low" id="rTotalWrong">0</div>
+          <div class="result-stat-label">累计答错</div>
+        </div>
+      </div>
+      <div id="resultSections"></div>
+      <div class="result-buttons">
+        <button class="btn-secondary" id="btnBackToUnits">返回列表</button>
+        <button class="btn-primary" id="btnRetry">再测一次</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="words.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var STORAGE_KEY = 'vocab-quiz-v2';
+    var LABELS = ['A', 'B', 'C', 'D'];
+    var MASTERY_HITS = 3;   // 本单元词需答对次数
+    var REVIEW_HITS = 1;    // 复习词需答对次数
+    var REQUEUE_GAP = 3;    // 答错后最少间隔几题再出现
+    var FALLBACK_DELAY = 1500; // TTS 不可用时的回退延迟
+    var hasTTS = !!(window.speechSynthesis);
+
+    // ---- Persistent data ----
+    var store = { mastered: [], unitDone: [] };
+
+    // ---- Session state ----
+    var currentUnitId = 0;
+    var queue = [];           // [{ wordId, correctHits, isReview }]
+    var masteredThisSession = new Set();
+    var sessionCorrect = 0;
+    var sessionWrong = 0;
+    var isAnswering = false;
+
+    // ---- DOM refs ----
+    var pages = {
+      select: document.getElementById('unitSelectPage'),
+      quiz:   document.getElementById('quizPage'),
+      result: document.getElementById('resultPage')
+    };
+
+    function showPage(name) {
+      Object.keys(pages).forEach(function (k) {
+        pages[k].classList.toggle('active', k === name);
+      });
+    }
+
+    // ==========================================
+    //  Utility
+    // ==========================================
+    function shuffle(arr) {
+      var a = arr.slice();
+      for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+      }
+      return a;
+    }
+
+    function wordById(id) {
+      for (var i = 0; i < WORDS.length; i++) {
+        if (WORDS[i].id === id) return WORDS[i];
+      }
+      return null;
+    }
+
+    // ==========================================
+    //  TTS: speak English then Chinese, then callback
+    // ==========================================
+    var ttsTimeout = null;
+
+    function speakThenNext(englishText, chineseText, callback) {
+      if (!hasTTS) {
+        setTimeout(callback, FALLBACK_DELAY);
+        return;
+      }
+
+      speechSynthesis.cancel();
+      if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
+
+      var enUtter = new SpeechSynthesisUtterance(englishText);
+      enUtter.lang = 'en-GB';
+      enUtter.rate = 0.9;
+
+      var zhUtter = new SpeechSynthesisUtterance(chineseText);
+      zhUtter.lang = 'zh-CN';
+      zhUtter.rate = 0.9;
+
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
+        setTimeout(callback, 300);
+      }
+
+      enUtter.onend = function () {
+        speechSynthesis.speak(zhUtter);
+      };
+      enUtter.onerror = function () {
+        speechSynthesis.speak(zhUtter);
+      };
+
+      zhUtter.onend = finish;
+      zhUtter.onerror = finish;
+
+      // Safety timeout: if TTS hangs, force continue after 6s
+      ttsTimeout = setTimeout(function () {
+        speechSynthesis.cancel();
+        finish();
+      }, 6000);
+
+      speechSynthesis.speak(enUtter);
+    }
+
+    function stopTTS() {
+      if (hasTTS) speechSynthesis.cancel();
+      if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
+    }
+
+    // ==========================================
+    //  localStorage
+    // ==========================================
+    function loadStore() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          store.mastered = parsed.mastered || [];
+          store.unitDone = parsed.unitDone || [];
+        }
+      } catch (e) {
+        store = { mastered: [], unitDone: [] };
+      }
+    }
+
+    function saveStore() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      } catch (e) {}
+    }
+
+    function resetAll() {
+      if (!confirm('确定要重置所有学习进度吗？')) return;
+      store = { mastered: [], unitDone: [] };
+      saveStore();
+      renderUnitList();
+    }
+
+    // ==========================================
+    //  Unit Select Page
+    // ==========================================
+    function renderUnitList() {
+      var container = document.getElementById('unitList');
+      container.innerHTML = '';
+
+      UNITS.forEach(function (u) {
+        var unitWords = WORDS.filter(function (w) { return w.unit === u.id; });
+        var masteredCount = unitWords.filter(function (w) {
+          return store.mastered.indexOf(w.id) !== -1;
+        }).length;
+        var isDone = store.unitDone.indexOf(u.id) !== -1;
+
+        // Count review words from previous units
+        var reviewCount = 0;
+        if (u.id > 1) {
+          reviewCount = store.mastered.filter(function (mid) {
+            var mw = wordById(mid);
+            return mw && mw.unit < u.id;
+          }).length;
+        }
+
+        var card = document.createElement('div');
+        card.className = 'unit-card' + (isDone ? ' done' : '');
+
+        var metaHtml = '<span>' + unitWords.length + ' 词</span>';
+        if (masteredCount > 0) {
+          metaHtml += '<span>已掌握 ' + masteredCount + '/' + unitWords.length + '</span>';
+        }
+        if (reviewCount > 0) {
+          metaHtml += '<span>+' + reviewCount + ' 复习词</span>';
+        }
+
+        card.innerHTML =
+          '<div class="unit-info">' +
+            '<div class="unit-name">' + u.name + '</div>' +
+            '<div class="unit-meta">' + metaHtml + '</div>' +
+          '</div>' +
+          '<span class="unit-badge ' + (isDone ? 'badge-done' : 'badge-go') + '">' +
+            (isDone ? '已完成' : '开始') +
+          '</span>';
+
+        card.addEventListener('click', function () { startQuiz(u.id); });
+        container.appendChild(card);
+      });
+    }
+
+    // ==========================================
+    //  Quiz Init
+    // ==========================================
+    function startQuiz(unitId) {
+      currentUnitId = unitId;
+      sessionCorrect = 0;
+      sessionWrong = 0;
+      masteredThisSession = new Set();
+      isAnswering = false;
+
+      var unitInfo = UNITS.filter(function (u) { return u.id === unitId; })[0];
+      document.getElementById('quizTitle').textContent = unitInfo.name;
+
+      // Build queue: unit words + review words
+      queue = [];
+
+      // Unit words (all, even previously mastered — re-test in this session)
+      var unitWords = WORDS.filter(function (w) { return w.unit === unitId; });
+      unitWords.forEach(function (w) {
+        queue.push({ wordId: w.id, correctHits: 0, isReview: false });
+      });
+
+      // Review words: mastered words from all earlier units
+      if (unitId > 1) {
+        var reviewIds = store.mastered.filter(function (mid) {
+          var mw = wordById(mid);
+          return mw && mw.unit < unitId;
+        });
+        reviewIds.forEach(function (rid) {
+          queue.push({ wordId: rid, correctHits: 0, isReview: true });
+        });
+      }
+
+      queue = shuffle(queue);
+      showPage('quiz');
+      updateQuizStats();
+      loadQuestion();
+    }
+
+    // ==========================================
+    //  Quiz: Load Question
+    // ==========================================
+    function loadQuestion() {
+      if (queue.length === 0) {
+        finishQuiz();
+        return;
+      }
+
+      isAnswering = false;
+      var item = queue[0];
+      var word = wordById(item.wordId);
+
+      // Tag
+      var tagEl = document.getElementById('wordTag');
+      if (item.isReview) {
+        tagEl.className = 'word-tag tag-review';
+        tagEl.textContent = '复习';
+      } else {
+        tagEl.className = 'word-tag tag-unit';
+        tagEl.textContent = '本单元';
+      }
+
+      // Word
+      document.getElementById('wordText').textContent = word.word;
+
+      // Mastery dots
+      var needed = item.isReview ? REVIEW_HITS : MASTERY_HITS;
+      var dotsHtml = '';
+      for (var d = 0; d < needed; d++) {
+        dotsHtml += '<span class="dot' + (d < item.correctHits ? ' filled' : '') + '"></span>';
+      }
+      document.getElementById('wordHits').innerHTML = dotsHtml;
+
+      // Options
+      var options = generateOptions(word);
+      renderOptions(options, word, item);
+    }
+
+    // ==========================================
+    //  Generate Options
+    // ==========================================
+    function generateOptions(correctWord) {
+      var pool = WORDS.filter(function (w) {
+        return w.id !== correctWord.id && w.meaning !== correctWord.meaning;
+      });
+      var distractors = [];
+      var shuffledPool = shuffle(pool);
+      for (var i = 0; i < shuffledPool.length && distractors.length < 3; i++) {
+        distractors.push(shuffledPool[i]);
+      }
+      return shuffle([correctWord].concat(distractors));
+    }
+
+    // ==========================================
+    //  Render Options
+    // ==========================================
+    function renderOptions(options, correctWord, queueItem) {
+      var container = document.getElementById('optionsContainer');
+      container.innerHTML = '';
+      options.forEach(function (opt, i) {
+        var btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerHTML =
+          '<span class="option-label">' + LABELS[i] + '</span>' +
+          '<span>' + opt.meaning + '</span>';
+        btn.addEventListener('click', function () {
+          handleAnswer(btn, options, i, correctWord, queueItem);
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    // ==========================================
+    //  Handle Answer
+    // ==========================================
+    function handleAnswer(btnEl, options, selectedIdx, correctWord, queueItem) {
+      if (isAnswering) return;
+      isAnswering = true;
+
+      var isCorrect = options[selectedIdx].id === correctWord.id;
+      var allBtns = document.getElementById('optionsContainer').querySelectorAll('.option-btn');
+
+      // Disable all
+      for (var b = 0; b < allBtns.length; b++) allBtns[b].classList.add('disabled');
+
+      // Remove current item from queue front
+      queue.shift();
+
+      var needed = queueItem.isReview ? REVIEW_HITS : MASTERY_HITS;
+
+      if (isCorrect) {
+        btnEl.classList.add('correct');
+        sessionCorrect++;
+        queueItem.correctHits++;
+
+        if (queueItem.correctHits >= needed) {
+          // Mastered / review passed
+          masteredThisSession.add(queueItem.wordId);
+        } else {
+          // Not yet mastered, put back at random position
+          requeue(queueItem);
+        }
+      } else {
+        btnEl.classList.add('wrong');
+        sessionWrong++;
+
+        // Highlight correct
+        for (var j = 0; j < options.length; j++) {
+          if (options[j].id === correctWord.id) {
+            allBtns[j].classList.add('correct');
+          }
+        }
+
+        // Reset hits and requeue
+        queueItem.correctHits = 0;
+        requeue(queueItem);
+      }
+
+      updateQuizStats();
+
+      setTimeout(function () {
+        speakThenNext(correctWord.word, correctWord.meaning, function () {
+          loadQuestion();
+        });
+      }, 400);
+    }
+
+    // ==========================================
+    //  Requeue item at a later random position
+    // ==========================================
+    function requeue(item) {
+      if (queue.length <= REQUEUE_GAP) {
+        queue.push(item);
+      } else {
+        var pos = REQUEUE_GAP + Math.floor(Math.random() * (queue.length - REQUEUE_GAP + 1));
+        queue.splice(pos, 0, item);
+      }
+    }
+
+    // ==========================================
+    //  Quiz Stats
+    // ==========================================
+    function updateQuizStats() {
+      var unitWords = WORDS.filter(function (w) { return w.unit === currentUnitId; });
+      var totalWords = unitWords.length;
+      var reviewTotal = 0;
+      if (currentUnitId > 1) {
+        reviewTotal = store.mastered.filter(function (mid) {
+          var mw = wordById(mid);
+          return mw && mw.unit < currentUnitId;
+        }).length;
+      }
+      var totalAll = totalWords + reviewTotal;
+
+      var masteredNow = masteredThisSession.size;
+
+      document.getElementById('statMastered').textContent =
+        '已掌握 ' + masteredNow + '/' + totalAll;
+
+      var total = sessionCorrect + sessionWrong;
+      var accEl = document.getElementById('statAccuracy');
+      if (total > 0) {
+        var pct = Math.round((sessionCorrect / total) * 100);
+        accEl.textContent = '正确率 ' + pct + '%';
+        accEl.className = pct >= 80 ? 'accuracy-high' : pct >= 60 ? 'accuracy-mid' : 'accuracy-low';
+      } else {
+        accEl.textContent = '正确率 --';
+        accEl.className = '';
+      }
+
+      var progressPct = totalAll > 0 ? Math.round((masteredNow / totalAll) * 100) : 0;
+      document.getElementById('progressFill').style.width = progressPct + '%';
+    }
+
+    // ==========================================
+    //  Finish Quiz
+    // ==========================================
+    function finishQuiz() {
+      // Save mastered words to store
+      var unitWords = WORDS.filter(function (w) { return w.unit === currentUnitId; });
+      unitWords.forEach(function (w) {
+        if (masteredThisSession.has(w.id) && store.mastered.indexOf(w.id) === -1) {
+          store.mastered.push(w.id);
+        }
+      });
+
+      // Mark unit done
+      if (store.unitDone.indexOf(currentUnitId) === -1) {
+        store.unitDone.push(currentUnitId);
+      }
+      saveStore();
+
+      // Categorize results
+      var unitMastered = [];
+      var reviewPassed = [];
+      masteredThisSession.forEach(function (wid) {
+        var w = wordById(wid);
+        if (w.unit === currentUnitId) {
+          unitMastered.push(w);
+        } else {
+          reviewPassed.push(w);
+        }
+      });
+
+      // Result page
+      var total = sessionCorrect + sessionWrong;
+      var pct = total > 0 ? Math.round((sessionCorrect / total) * 100) : 0;
+
+      document.getElementById('rUnitMastered').textContent = unitMastered.length;
+      document.getElementById('rReviewPassed').textContent = reviewPassed.length;
+      document.getElementById('rTotalCorrect').textContent = sessionCorrect;
+      document.getElementById('rTotalWrong').textContent = sessionWrong;
+
+      var icon = document.getElementById('resultIcon');
+      var title = document.getElementById('resultTitle');
+      if (pct >= 90) {
+        icon.textContent = '\u{1F389}';
+        title.textContent = '\u592A\u68D2\u4E86\uFF01';
+      } else if (pct >= 70) {
+        icon.textContent = '\u{1F44D}';
+        title.textContent = '\u505A\u5F97\u4E0D\u9519\uFF01';
+      } else {
+        icon.textContent = '\u{1F4AA}';
+        title.textContent = '\u7EE7\u7EED\u52A0\u6CB9\uFF01';
+      }
+
+      // Word chips
+      var sectionsEl = document.getElementById('resultSections');
+      sectionsEl.innerHTML = '';
+
+      if (unitMastered.length > 0) {
+        sectionsEl.innerHTML +=
+          '<div class="result-section">' +
+            '<div class="result-section-title">\u672C\u5355\u5143\u5DF2\u638C\u63E1</div>' +
+            '<div class="result-word-list">' +
+              unitMastered.map(function (w) {
+                return '<span class="result-word-chip chip-mastered">' + w.word + '</span>';
+              }).join('') +
+            '</div>' +
+          '</div>';
+      }
+
+      if (reviewPassed.length > 0) {
+        sectionsEl.innerHTML +=
+          '<div class="result-section">' +
+            '<div class="result-section-title">\u590D\u4E60\u8BCD\u5DF2\u901A\u8FC7</div>' +
+            '<div class="result-word-list">' +
+              reviewPassed.map(function (w) {
+                return '<span class="result-word-chip chip-review-pass">' + w.word + '</span>';
+              }).join('') +
+            '</div>' +
+          '</div>';
+      }
+
+      showPage('result');
+    }
+
+    // ==========================================
+    //  Back to unit list (with confirm if quiz in progress)
+    // ==========================================
+    function backToUnits() {
+      if (queue.length > 0) {
+        if (!confirm('检测还未完成，确定要退出吗？（本次进度不会保存）')) return;
+      }
+      stopTTS();
+      queue = [];
+      loadStore();
+      renderUnitList();
+      showPage('select');
+    }
+
+    // ==========================================
+    //  Event Listeners
+    // ==========================================
+    document.getElementById('btnResetAll').addEventListener('click', resetAll);
+    document.getElementById('btnBack').addEventListener('click', backToUnits);
+    document.getElementById('btnBackToUnits').addEventListener('click', function () {
+      stopTTS();
+      loadStore();
+      renderUnitList();
+      showPage('select');
+    });
+    document.getElementById('btnRetry').addEventListener('click', function () {
+      stopTTS();
+      startQuiz(currentUnitId);
+    });
+
+    // ==========================================
+    //  Init
+    // ==========================================
+    loadStore();
+    renderUnitList();
+  })();
+  </script>
+</body>
+</html>
