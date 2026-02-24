@@ -524,10 +524,23 @@
     function playAudio(url) {
       return new Promise(function (resolve) {
         try {
-          var audio = new Audio(url);
-          audio.onended = function () { resolve(true); };
-          audio.onerror = function () { resolve(false); };
-          audio.play().catch(function () { resolve(false); });
+          var audio = new Audio();
+          var settled = false;
+          function done(ok) {
+            if (settled) return;
+            settled = true;
+            resolve(ok);
+          }
+          audio.onended = function () { done(true); };
+          audio.oncanplaythrough = function () {
+            audio.play().catch(function () { done(false); });
+          };
+          audio.onerror = function () { done(false); };
+          // Timeout: if nothing happens in 5s, give up
+          setTimeout(function () { done(false); }, 5000);
+          audio.preload = 'auto';
+          audio.src = url;
+          audio.load();
         } catch (e) { resolve(false); }
       });
     }
@@ -565,12 +578,23 @@
     }
 
     function speakChinese(text, callback) {
-      // Try Youdao audio first
-      var url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&le=zh';
-      playAudio(url).then(function (ok) {
+      // Clean text for TTS (remove annotations like "adj.", "n.", "v." etc.)
+      var cleanText = text.replace(/^[a-z]+\.\s*/gi, '').replace(/[()（）]/g, '');
+      
+      // Try multiple Chinese TTS sources
+      // 1. Youdao Chinese TTS
+      var youdaoUrl = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(cleanText) + '&le=zh';
+      
+      playAudio(youdaoUrl).then(function (ok) {
         if (ok) { callback(); return; }
-        // Fallback: Web Speech API
-        speakWithSpeechAPI(text, 'zh-CN').then(function () { callback(); });
+        
+        // 2. Fallback: Web Speech API with Chinese voice
+        speakWithSpeechAPI(cleanText, 'zh-CN').then(function (ok2) {
+          if (ok2) { callback(); return; }
+          
+          // 3. Final fallback: just delay and continue
+          setTimeout(callback, 800);
+        });
       });
     }
 
