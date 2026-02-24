@@ -469,7 +469,6 @@
     var LABELS = ['A', 'B', 'C', 'D'];
     var REQUEUE_GAP = 3;    // 答错后最少间隔几题再出现
     var FALLBACK_DELAY = 1500; // TTS 不可用时的回退延迟
-    var hasTTS = !!(window.speechSynthesis);
 
     // ---- Persistent data ----
     var store = { mastered: [], unitDone: [] };
@@ -516,55 +515,89 @@
 
     // ==========================================
     //  TTS: speak English then Chinese, then callback
+    //  Primary: Youdao dictionary audio (works in WeChat)
+    //  Fallback: Web Speech API
     // ==========================================
     var ttsTimeout = null;
+    var hasTTS = !!(window.speechSynthesis);
+
+    function playAudio(url) {
+      return new Promise(function (resolve) {
+        try {
+          var audio = new Audio(url);
+          audio.onended = function () { resolve(true); };
+          audio.onerror = function () { resolve(false); };
+          audio.play().catch(function () { resolve(false); });
+        } catch (e) { resolve(false); }
+      });
+    }
+
+    function speakWithSpeechAPI(text, lang) {
+      return new Promise(function (resolve) {
+        if (!hasTTS) { resolve(false); return; }
+        try {
+          var uttr = new SpeechSynthesisUtterance(text);
+          uttr.lang = lang;
+          uttr.rate = 0.85;
+          var settled = false;
+          function done(ok) {
+            if (settled) return;
+            settled = true;
+            resolve(ok);
+          }
+          uttr.onend = function () { done(true); };
+          uttr.onerror = function () { done(false); };
+          // If no event fires within 3s, assume failure
+          setTimeout(function () { done(false); }, 3000);
+          speechSynthesis.speak(uttr);
+        } catch (e) { resolve(false); }
+      });
+    }
+
+    function speakEnglish(text, callback) {
+      // Try Youdao audio first (type=2 = UK pronunciation)
+      var url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=2';
+      playAudio(url).then(function (ok) {
+        if (ok) { callback(); return; }
+        // Fallback: Web Speech API
+        speakWithSpeechAPI(text, 'en-GB').then(function () { callback(); });
+      });
+    }
+
+    function speakChinese(text, callback) {
+      // Try Youdao audio first
+      var url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&le=zh';
+      playAudio(url).then(function (ok) {
+        if (ok) { callback(); return; }
+        // Fallback: Web Speech API
+        speakWithSpeechAPI(text, 'zh-CN').then(function () { callback(); });
+      });
+    }
 
     function speakThenNext(englishText, chineseText, callback) {
-      if (!hasTTS) {
-        setTimeout(callback, FALLBACK_DELAY);
-        return;
-      }
-
-      // Cancel any ongoing speech
-      speechSynthesis.cancel();
       if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
-
-      var enUtter = new SpeechSynthesisUtterance(englishText);
-      enUtter.lang = 'en-GB';
-      enUtter.rate = 0.85;
-
-      var zhUtter = new SpeechSynthesisUtterance(chineseText);
-      zhUtter.lang = 'zh-CN';
-      zhUtter.rate = 0.85;
+      if (hasTTS) speechSynthesis.cancel();
 
       var done = false;
       function finish() {
         if (done) return;
         done = true;
         if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
-        setTimeout(callback, 400);
+        setTimeout(callback, 300);
       }
 
-      enUtter.onend = function () {
-        setTimeout(function () { speechSynthesis.speak(zhUtter); }, 150);
-      };
-      enUtter.onerror = function () {
-        setTimeout(function () { speechSynthesis.speak(zhUtter); }, 150);
-      };
-
-      zhUtter.onend = finish;
-      zhUtter.onerror = finish;
-
-      // Safety timeout: if TTS hangs, force continue after 8s
+      // Safety timeout
       ttsTimeout = setTimeout(function () {
-        speechSynthesis.cancel();
+        if (hasTTS) speechSynthesis.cancel();
         finish();
-      }, 8000);
+      }, 10000);
 
-      // Delay after cancel() to avoid Chrome/mobile bug where speak() is silently ignored
-      setTimeout(function () {
-        speechSynthesis.speak(enUtter);
-      }, 150);
+      // Sequence: English → Chinese → next
+      speakEnglish(englishText, function () {
+        setTimeout(function () {
+          speakChinese(chineseText, finish);
+        }, 200);
+      });
     }
 
     function stopTTS() {
@@ -725,8 +758,14 @@
       masteredThisSession = new Set();
       isAnswering = false;
 
-      // Warm up AudioContext and TTS on user gesture (required by mobile browsers)
+      // Warm up AudioContext and Audio playback on user gesture (required by mobile/WeChat)
       ensureAudioCtx();
+      try {
+        var warmupAudio = new Audio();
+        warmupAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+        warmupAudio.volume = 0;
+        warmupAudio.play().catch(function () {});
+      } catch (e) {}
       if (hasTTS) {
         try {
           speechSynthesis.cancel();
